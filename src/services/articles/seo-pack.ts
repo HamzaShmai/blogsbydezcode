@@ -84,7 +84,7 @@ export function buildSeoPack(input: {
   if (!seoTitle.toLowerCase().includes(focus.toLowerCase().slice(0, 24))) {
     seoTitle = `${focus} — ${seoTitle}`;
   }
-  seoTitle = seoTitle.slice(0, 60).replace(/\s+[—-|]\s*$/, "").trim();
+  seoTitle = seoTitle.slice(0, 60).replace(/\s+(?:—|-|\|)\s*$/, "").trim();
   if (seoTitle.length > 60) seoTitle = seoTitle.slice(0, 57).trim() + "…";
 
   let meta = cleanKw(input.metaDescription || "");
