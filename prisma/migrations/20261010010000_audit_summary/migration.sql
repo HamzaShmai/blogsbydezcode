@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "SeoAudit" ADD COLUMN IF NOT EXISTS "summaryJson" TEXT NOT NULL DEFAULT '{}';

@@ -1,0 +1,581 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrgType {
+  AGENCY
+  CLIENT
+}
+
+enum Role {
+  AGENCY_ADMIN
+  AGENCY_MEMBER
+  CLIENT_ADMIN
+  CLIENT_VIEWER
+}
+
+enum CmsType {
+  WORDPRESS
+  SHOPIFY
+  CUSTOM_WEBHOOK
+  GIT_CONTENT
+}
+
+enum PublishMode {
+  DRAFT_ONLY
+  APPROVAL_REQUIRED
+  FULL_AUTOPILOT
+}
+
+enum ArticleStatus {
+  DRAFT
+  SCHEDULED
+  PENDING_APPROVAL
+  PUBLISHED
+  FAILED
+  REJECTED
+}
+
+enum JobStatus {
+  PENDING
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  STALE
+}
+
+enum JobType {
+  SYNC_GSC
+  CRAWL_SEO_AUDIT
+  DISCOVER_TOPICS
+  RESEARCH_TOPIC
+  GENERATE_ARTICLE
+  GENERATE_IMAGE
+  QUALITY_CHECK
+  PUBLISH_ARTICLE
+  VERIFY_PUBLICATION
+  MONITOR_GSC_FEEDBACK
+  MONTHLY_REPORT
+  STALE_JOB_RECOVERY
+  AUTOPILOT_PIPELINE
+}
+
+enum IssueSeverity {
+  INFO
+  WARNING
+  ERROR
+  CRITICAL
+}
+
+enum OpportunityType {
+  DECLINING_PAGE
+  CONTENT_GAP
+  NEW_TOPIC
+  QUERY_OPPORTUNITY
+}
+
+enum BacklinkStatus {
+  NEW
+  SHORTLISTED
+  OUTREACH
+  WON
+  SKIPPED
+}
+
+enum BacklinkKind {
+  GUEST_POST
+  RESOURCE_PAGE
+  DIRECTORY
+  PARTNER
+  MENTION
+  FORUM
+  OTHER
+}
+
+enum DataKind {
+  MEASURED
+  ESTIMATE
+  RECOMMENDATION
+}
+
+model User {
+  id             String       @id @default(cuid())
+  email          String       @unique
+  name           String?
+  passwordHash   String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  memberships    Membership[]
+  auditLogs      AuditLog[]
+  articleEdits   Article[]    @relation("ArticleEditor")
+  approvals      Article[]    @relation("ArticleApprover")
+}
+
+model Organization {
+  id          String       @id @default(cuid())
+  name        String
+  slug        String       @unique
+  type        OrgType
+  agencyId    String?
+  agency      Organization?  @relation("AgencyClients", fields: [agencyId], references: [id])
+  clients     Organization[] @relation("AgencyClients")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  memberships Membership[]
+  websites    Website[]
+  auditLogs   AuditLog[]
+  invites     Invite[]
+}
+
+model Membership {
+  id             String       @id @default(cuid())
+  userId         String
+  organizationId String
+  role           Role
+  createdAt      DateTime     @default(now())
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+}
+
+model Invite {
+  id             String       @id @default(cuid())
+  email          String
+  organizationId String
+  role           Role
+  token          String       @unique
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([email])
+}
+
+model Website {
+  id               String                 @id @default(cuid())
+  organizationId   String
+  name             String
+  domain           String
+  cmsType          CmsType
+  credentialsEnc   String?
+  gscProperty      String?
+  gscTokensEnc     String?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  organization     Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  settings         WebsiteSettings?
+  categories       Category[]
+  articles         Article[]
+  gscSnapshots     GscSnapshot[]
+  gscQueries       GscQuery[]
+  gscPages         GscPage[]
+  seoAudits        SeoAudit[]
+  opportunities    ContentOpportunity[]
+  recommendations  TopicRecommendation[]
+  backlinkProspects BacklinkProspect[]
+  jobs             Job[]
+  usageRecords     UsageRecord[]
+  reports          MonthlyReport[]
+
+  @@index([organizationId])
+  @@unique([organizationId, domain])
+}
+
+model BacklinkProspect {
+  id            String         @id @default(cuid())
+  websiteId     String
+  domain        String
+  url           String
+  title         String
+  kind          BacklinkKind   @default(OTHER)
+  status        BacklinkStatus @default(NEW)
+  score         Float          @default(0)
+  nicheFit      String?
+  outreachAngle String?
+  contactHint   String?
+  evidenceJson  String         @default("{}")
+  source        String         @default("ai_agent")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  website       Website        @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
+  @@unique([websiteId, url])
+  @@index([websiteId, status, score])
+}
+
+model WebsiteSettings {
+  id                       String      @id @default(cuid())
+  websiteId                String      @unique
+  autopilotEnabled         Boolean     @default(false)
+  publishMode              PublishMode @default(APPROVAL_REQUIRED)
+  dailyPublishLimit        Int         @default(1)
+  weeklyPublishLimit       Int         @default(5)
+  timezone                 String      @default("UTC")
+  publishTimes             String[]    @default(["09:00"])
+  categoryIds              String[]    @default([])
+  aiProvider               String      @default("openai")
+  imageProvider            String      @default("openai")
+  maxUsageBudgetUsd        Float       @default(10)
+  minQualityThreshold      Float       @default(0.7)
+  automaticTechnicalFixes  Boolean     @default(false)
+  notifyOnPublish          Boolean     @default(true)
+  notifyOnFailure          Boolean     @default(true)
+  gscSyncCron              String      @default("0 6 * * *")
+  auditCron                String      @default("0 7 * * 1")
+  topicDiscoveryCron       String      @default("0 8 * * 1")
+  createdAt                DateTime    @default(now())
+  updatedAt                DateTime    @updatedAt
+  website                  Website     @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+}
+
+model Category {
+  id        String    @id @default(cuid())
+  websiteId String
+  name      String
+  slug      String
+  createdAt DateTime  @default(now())
+  website   Website   @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  articles  Article[]
+
+  @@unique([websiteId, slug])
+}
+
+model Article {
+  id               String            @id @default(cuid())
+  websiteId        String
+  categoryId       String?
+  title            String
+  slug             String
+  status           ArticleStatus     @default(DRAFT)
+  contentHtml      String            @default("")
+  contentMarkdown  String            @default("")
+  excerpt          String?
+  seoTitle         String?
+  metaDescription  String?
+  tags             String[]          @default([])
+  featuredImageUrl String?
+  featuredImageAlt String?
+  contentHash      String?
+  cmsPostId        String?
+  publishedUrl     String?
+  scheduledAt      DateTime?
+  publishedAt      DateTime?
+  manuallyEditedAt DateTime?
+  rejectionReason  String?
+  qualityScore     Float?
+  topicId          String?
+  createdById      String?
+  approvedById     String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  website          Website           @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  category         Category?         @relation(fields: [categoryId], references: [id])
+  createdBy        User?             @relation("ArticleEditor", fields: [createdById], references: [id])
+  approvedBy       User?             @relation("ArticleApprover", fields: [approvedById], references: [id])
+  topic            TopicRecommendation? @relation(fields: [topicId], references: [id])
+  versions         ArticleVersion[]
+  assets           ArticleAsset[]
+  researchBrief    ResearchBrief?
+  outline          Outline?
+  internalLinks    InternalLinkSuggestion[]
+  publications     PublicationAttempt[]
+
+  @@unique([websiteId, slug])
+  @@index([websiteId, status])
+  @@index([scheduledAt])
+}
+
+model ArticleVersion {
+  id              String   @id @default(cuid())
+  articleId       String
+  version         Int
+  title           String
+  contentHtml     String
+  contentMarkdown String
+  seoTitle        String?
+  metaDescription String?
+  changeNote      String?
+  createdAt       DateTime @default(now())
+  article         Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@unique([articleId, version])
+}
+
+model ArticleAsset {
+  id        String   @id @default(cuid())
+  articleId String
+  url       String
+  altText   String?
+  kind      String   @default("featured")
+  provider  String?
+  createdAt DateTime @default(now())
+  article   Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+}
+
+model ResearchBrief {
+  id            String   @id @default(cuid())
+  articleId     String   @unique
+  query         String
+  summary       String
+  sourcesJson   String   @default("[]")
+  hasLiveResearch Boolean @default(false)
+  createdAt     DateTime @default(now())
+  article       Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+}
+
+model Outline {
+  id        String   @id @default(cuid())
+  articleId String   @unique
+  headings  String   @default("[]")
+  createdAt DateTime @default(now())
+  article   Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+}
+
+model InternalLinkSuggestion {
+  id          String   @id @default(cuid())
+  articleId   String
+  targetUrl   String
+  anchorText  String
+  reason      String?
+  accepted    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  article     Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+}
+
+model PublicationAttempt {
+  id          String   @id @default(cuid())
+  articleId   String
+  attempt     Int
+  success     Boolean
+  cmsPostId   String?
+  publishedUrl String?
+  errorLog    String?
+  idempotencyKey String
+  createdAt   DateTime @default(now())
+  article     Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@unique([articleId, idempotencyKey])
+  @@index([articleId])
+}
+
+model GscSnapshot {
+  id          String   @id @default(cuid())
+  websiteId   String
+  date        DateTime
+  clicks      Int      @default(0)
+  impressions Int      @default(0)
+  ctr         Float    @default(0)
+  position    Float    @default(0)
+  kind        DataKind @default(MEASURED)
+  createdAt   DateTime @default(now())
+  website     Website  @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
+  @@unique([websiteId, date])
+}
+
+model GscQuery {
+  id          String   @id @default(cuid())
+  websiteId   String
+  query       String
+  clicks      Int      @default(0)
+  impressions Int      @default(0)
+  ctr         Float    @default(0)
+  position    Float    @default(0)
+  periodStart DateTime
+  periodEnd   DateTime
+  kind        DataKind @default(MEASURED)
+  createdAt   DateTime @default(now())
+  website     Website  @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
+  @@index([websiteId, query])
+}
+
+model GscPage {
+  id          String   @id @default(cuid())
+  websiteId   String
+  pageUrl     String
+  clicks      Int      @default(0)
+  impressions Int      @default(0)
+  ctr         Float    @default(0)
+  position    Float    @default(0)
+  periodStart DateTime
+  periodEnd   DateTime
+  kind        DataKind @default(MEASURED)
+  createdAt   DateTime @default(now())
+  website     Website  @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
+  @@index([websiteId, pageUrl])
+}
+
+model SeoAudit {
+  id           String     @id @default(cuid())
+  websiteId    String
+  startedAt    DateTime   @default(now())
+  finishedAt   DateTime?
+  healthScore  Float?
+  pagesCrawled Int        @default(0)
+  verified     Boolean    @default(false)
+  /// Deep audit summary for PDF/report UI (JSON)
+  summaryJson  String     @default("{}")
+  website      Website    @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  issues       SeoIssue[]
+}
+
+model SeoIssue {
+  id          String        @id @default(cuid())
+  auditId     String
+  pageUrl     String
+  code        String
+  message     String
+  severity    IssueSeverity @default(WARNING)
+  resolved    Boolean       @default(false)
+  resolvedAt  DateTime?
+  verifiedAt  DateTime?
+  createdAt   DateTime      @default(now())
+  audit       SeoAudit      @relation(fields: [auditId], references: [id], onDelete: Cascade)
+
+  @@index([auditId, resolved])
+}
+
+model ContentOpportunity {
+  id          String          @id @default(cuid())
+  websiteId   String
+  type        OpportunityType
+  title       String
+  description String
+  score       Float           @default(0)
+  evidenceJson String         @default("{}")
+  kind        DataKind        @default(RECOMMENDATION)
+  dismissed   Boolean         @default(false)
+  createdAt   DateTime        @default(now())
+  website     Website         @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
+  @@index([websiteId, dismissed])
+}
+
+model TopicRecommendation {
+  id              String    @id @default(cuid())
+  websiteId       String
+  title           String
+  keyword         String
+  searchIntent    String?
+  score           Float     @default(0)
+  feedbackScore   Float?
+  rationale       String?
+  evidenceJson    String    @default("{}")
+  kind            DataKind  @default(RECOMMENDATION)
+  selected        Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  website         Website   @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  articles        Article[]
+
+  @@index([websiteId, score])
+}
+
+model Job {
+  id             String    @id @default(cuid())
+  websiteId      String?
+  type           JobType
+  status         JobStatus @default(PENDING)
+  payloadJson    String    @default("{}")
+  payloadHash    String
+  idempotencyKey String    @unique
+  attempts       Int       @default(0)
+  maxAttempts    Int       @default(5)
+  lockUntil      DateTime?
+  lockedBy       String?
+  lastError      String?
+  resultJson     String?
+  scheduledFor   DateTime?
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  website        Website?  @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  logs           JobLog[]
+
+  @@index([status, scheduledFor])
+  @@index([websiteId, type])
+  @@index([payloadHash])
+}
+
+model JobLog {
+  id        String   @id @default(cuid())
+  jobId     String
+  level     String   @default("info")
+  message   String
+  metaJson  String?
+  createdAt DateTime @default(now())
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+}
+
+model JobLock {
+  id        String   @id @default(cuid())
+  lockKey   String   @unique
+  owner     String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model UsageRecord {
+  id          String   @id @default(cuid())
+  websiteId   String
+  provider    String
+  kind        String
+  units       Float    @default(0)
+  estimatedUsd Float   @default(0)
+  metaJson    String?
+  createdAt   DateTime @default(now())
+  website     Website  @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
+  @@index([websiteId, createdAt])
+}
+
+model EmergencyStop {
+  id        String   @id @default(cuid())
+  active    Boolean  @default(false)
+  reason    String?
+  activatedBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id             String        @id @default(cuid())
+  organizationId String?
+  userId         String?
+  action         String
+  entityType     String?
+  entityId       String?
+  metaJson       String?
+  createdAt      DateTime      @default(now())
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  user           User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+}
+
+model MonthlyReport {
+  id          String   @id @default(cuid())
+  websiteId   String
+  year        Int
+  month       Int
+  summaryJson String
+  kind        DataKind @default(MEASURED)
+  createdAt   DateTime @default(now())
+  website     Website  @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
+  @@unique([websiteId, year, month])
+}

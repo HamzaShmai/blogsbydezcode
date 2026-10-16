@@ -1,36 +1,53 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PulseRank — Unified AI SEO + Blog Publishing
 
-## Getting Started
+One login for the agency, separate client portals, multiple connected websites, Search Console monitoring, research-driven article generation, image generation, scheduled publishing, and a GSC feedback loop for future recommendations (never ranking guarantees).
 
-First, run the development server:
+## Stack
+
+- Next.js 15 (App Router) + Auth.js
+- Prisma + PostgreSQL (Neon in production, Docker locally)
+- Upstash QStash for cloud jobs (inline jobs for local/dev)
+- WordPress, Shopify, custom webhook, and Git/MDX adapters
+
+## Quick start
 
 ```bash
+cp .env.example .env
+docker compose up -d
+# DATABASE_URL=postgresql://pulserank:pulserank@localhost:5432/pulserank
+npm install
+npx prisma migrate deploy
+npm run db:seed
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Demo accounts (from seed):
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- Agency: `agency@pulserank.local` / `password123`
+- Client: `client@acme.local` / `password123`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+With `JOBS_INLINE=true` and `ALLOW_OFFLINE_AI=true`, the full topic → article → approve pipeline works without OpenAI or QStash.
 
-## Learn More
+## Scripts
 
-To learn more about Next.js, take a look at the following resources:
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Local Next.js |
+| `npm run build` | Production build |
+| `npm test` | Vitest unit/integration tests |
+| `npm run db:seed` | Seed agency, client, demo website |
+| `npx prisma migrate deploy` | Apply migrations |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Docs
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- [Deployment](docs/DEPLOYMENT.md)
+- [Free-tier limits](docs/FREE_TIER.md)
+- [Publishing adapters](docs/PUBLISHING_ADAPTERS.md)
 
-## Deploy on Vercel
+## Safety
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Modes: draft only · approval required · full autopilot
+- Global emergency stop
+- Encrypted CMS/GSC credentials
+- Manual-edit protection, duplicate publish guards, verified issue resolution
+- Measured analytics clearly separated from recommendations
