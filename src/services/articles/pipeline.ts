@@ -370,7 +370,7 @@ export async function researchAndGenerate(
     await prisma.internalLinkSuggestion.create({
       data: {
         articleId: article.id,
-        targetUrl: a.publishedUrl!,
+        targetUrl: a.url,
         anchorText: a.title,
         reason: "Style-matched internal link from site content graph",
         accepted: true,

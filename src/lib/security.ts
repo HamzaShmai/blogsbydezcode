@@ -72,18 +72,19 @@ export function assertSecureEnv() {
     if (process.env.NODE_ENV === "production") weak.push("CREDENTIALS_ENCRYPTION_KEY");
   }
 
-  if (process.env.NODE_ENV === "production") {
+  // Skip hard throws during `next build` (page data collection loads auth modules).
+  const isBuild =
+    process.env.NEXT_PHASE === "phase-production-build" ||
+    process.env.npm_lifecycle_event === "build";
+
+  if (process.env.NODE_ENV === "production" && !isBuild) {
     if (missing.length || weak.length) {
       throw new Error(
         `Insecure production configuration: missing=[${missing.join(",")}] weak=[${weak.join(",")}]`
       );
     }
-    if (process.env.JOBS_INLINE === "true") {
-      throw new Error("JOBS_INLINE cannot be true in production — use signed QStash workers");
-    }
-    if (process.env.ALLOW_OFFLINE_AI === "true") {
-      // Allowed but logged mentally — not a secret leak; no throw
-    }
+    // JOBS_INLINE=true is allowed for free-tier deploys without QStash.
+    // Prefer QStash in production when available.
   }
 
   return { missing, weak };

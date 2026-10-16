@@ -77,10 +77,11 @@ export async function enqueueJob(input: {
       headers: { "Upstash-Deduplication-Id": idempotencyKey },
     });
   } else if (
-    process.env.NODE_ENV !== "production" &&
-    (process.env.JOBS_INLINE === "true" || process.env.NODE_ENV === "test")
+    process.env.JOBS_INLINE === "true" ||
+    process.env.NODE_ENV === "test" ||
+    process.env.NODE_ENV !== "production"
   ) {
-    // Local/dev only — never inline-execute jobs in production
+    // Inline worker when QStash is unset (local + free-tier Vercel).
     setTimeout(() => {
       import("@/services/jobs/runner").then(({ runJobById }) => {
         void runJobById(job.id);
@@ -91,11 +92,11 @@ export async function enqueueJob(input: {
       where: { id: job.id },
       data: {
         status: "FAILED",
-        lastError: "QSTASH_TOKEN required in production",
+        lastError: "QSTASH_TOKEN required (or set JOBS_INLINE=true)",
         finishedAt: new Date(),
       },
     });
-    throw new Error("QSTASH_TOKEN required in production");
+    throw new Error("QSTASH_TOKEN required (or set JOBS_INLINE=true)");
   }
 
   return job;

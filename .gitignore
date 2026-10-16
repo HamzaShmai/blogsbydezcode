@@ -42,3 +42,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# secrets / local env (keep .env.example tracked)
+.env
+.env.*
+!.env.example
